@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stickman Battle Royale 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@600;700&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #090d16;
+            color: #ffffff;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        .font-game {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(8px);
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .glass-card.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.2);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        #minimap {
+            background: rgba(15, 23, 42, 0.85);
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            active: scale(0.9);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D CANVAS CONTAINER -->
+    <div id="game-container"></div>
+
+    <!-- UI OVERLAY -->
+    <div id="ui-layer" class="relative z-20 w-full h-screen pointer-events-none flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- HUD ATAS -->
+        <div id="hud-top" class="hidden justify-between items-start w-full">
+            <div class="flex flex-col gap-2">
+                <!-- Health Bar -->
+                <div class="glass-panel px-4 py-2 rounded-xl w-48 md:w-64 pointer-events-auto">
+                    <div class="flex justify-between items-center mb-1 text-xs font-bold text-blue-400">
+                        <span id="player-name-hud"><i class="fa-solid fa-user-ninja mr-1"></i> PLAYER</span>
+                        <span id="hp-text">100 / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
+                        <div id="hp-bar" class="bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500 h-full w-full transition-all duration-200"></div>
+                    </div>
+                </div>
+
+                <!-- Game Info -->
+                <div class="glass-panel px-3 py-1 rounded-lg w-fit text-xs font-bold text-amber-400">
+                    MUSUH TERSISA: <span id="enemy-count" class="text-white text-sm">0</span>
+                </div>
+            </div>
+
+            <!-- Radar MiniMap -->
+            <div class="flex flex-col items-end gap-1">
+                <canvas id="minimap" width="110" height="110"></canvas>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">RADAR ARENA</span>
+            </div>
+        </div>
+
+        <!-- NOTIFIKASI / KILL FEED -->
+        <div id="kill-feed" class="hidden self-center glass-panel px-4 py-2 rounded-xl text-center pointer-events-none transition-all duration-300">
+            <p id="kill-text" class="text-sm font-bold text-yellow-400"></p>
+        </div>
+
+        <!-- CONTROLS UNTUK MOBILE (D-PAD & ACTION) -->
+        <div id="mobile-controls" class="hidden justify-between items-end w-full pointer-events-auto pb-4">
+            <!-- D-Pad Virtual -->
+            <div class="relative w-32 h-32 bg-slate-900/40 rounded-full border border-slate-700/50 backdrop-blur-sm flex items-center justify-center">
+                <button id="btn-up" class="absolute top-1 w-10 h-10 touch-btn text-white"><i class="fa-solid fa-chevron-up"></i></button>
+                <button id="btn-down" class="absolute bottom-1 w-10 h-10 touch-btn text-white"><i class="fa-solid fa-chevron-down"></i></button>
+                <button id="btn-left" class="absolute left-1 w-10 h-10 touch-btn text-white"><i class="fa-solid fa-chevron-left"></i></button>
+                <button id="btn-right" class="absolute right-1 w-10 h-10 touch-btn text-white"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 items-end">
+                <button id="btn-attack" class="w-16 h-16 bg-red-600/80 hover:bg-red-500 text-white rounded-full border-2 border-red-400 flex items-center justify-center text-xl shadow-lg active:scale-95">
+                    <i class="fa-solid fa-hand-fist"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- DESKTOP INSTRUCTION -->
+        <div id="desktop-hud" class="hidden text-center text-xs text-slate-400 pointer-events-none">
+            Gunakan <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-amber-300">WASD</kbd> atau <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-amber-300">Arah Panah</kbd> untuk Bergerak | <kbd class="px-1.5 py-0.5 bg-red-950 border border-red-700 rounded text-red-300">SPASI / Klik Kiri</kbd> Serang
+        </div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="menu-overlay" class="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="glass-panel p-6 md:p-8 rounded-3xl max-w-4xl w-full border border-slate-700/50 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
+            
+            <!-- HEADER -->
+            <div class="text-center">
+                <h1 class="text-3xl md:text-5xl font-game font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-red-500 tracking-wider">
+                    STICKMAN BATTLE ROYALE
+                </h1>
+                <p class="text-xs md:text-sm text-slate-400 mt-1">Pilih Karakter, Mode, dan Map untuk Memulai Pertempuran!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 1. PILIH KARAKTER -->
+                <div class="flex flex-col gap-3">
+                    <h2 class="text-sm font-bold text-blue-400 uppercase tracking-wider"><i class="fa-solid fa-user-shield mr-1"></i> Pilih Karakter</h2>
+                    <div class="grid grid-cols-2 gap-2" id="char-selector">
+                        <div data-char="brawler" class="glass-card active p-3 rounded-xl cursor-pointer text-center">
+                            <i class="fa-solid fa-hand-fist text-2xl text-blue-400 mb-1"></i>
+                            <div class="font-bold text-xs">Brawler</div>
+                            <div class="text-[10px] text-slate-400">Seimbang & Kuat</div>
+                        </div>
+                        <div data-char="ranger" class="glass-card p-3 rounded-xl cursor-pointer text-center">
+                            <i class="fa-solid fa-bolt text-2xl text-yellow-400 mb-1"></i>
+                            <div class="font-bold text-xs">Ranger</div>
+                            <div class="text-[10px] text-slate-400">Cepat & Lincah</div>
+                        </div>
+                        <div data-char="tank" class="glass-card p-3 rounded-xl cursor-pointer text-center">
+                            <i class="fa-solid fa-shield-cat text-2xl text-emerald-400 mb-1"></i>
+                            <div class="font-bold text-xs">Tank</div>
+                            <div class="text-[10px] text-slate-400">Darah Tebal</div>
+                        </div>
+                        <div data-char="assassin" class="glass-card p-3 rounded-xl cursor-pointer text-center">
+                            <i class="fa-solid fa-skull text-2xl text-red-400 mb-1"></i>
+                            <div class="font-bold text-xs">Assassin</div>
+                            <div class="text-[10px] text-slate-400">Damage Tinggi</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. PILIH MAP -->
+                <div class="flex flex-col gap-3">
+                    <h2 class="text-sm font-bold text-emerald-400 uppercase tracking-wider"><i class="fa-solid fa-map-location-dot mr-1"></i> Pilih Map Arena</h2>
+                    <div class="flex flex-col gap-2" id="map-selector">
+                        <div data-map="forest" class="glass-card active p-3 rounded-xl cursor-pointer flex items-center gap-3">
+                            <i class="fa-solid fa-tree text-xl text-emerald-400"></i>
+                            <div>
+                                <div class="font-bold text-xs">Hutan Terlarang</div>
+                                <div class="text-[10px] text-slate-400">Arena standar penuh pepohonan</div>
+                            </div>
+                        </div>
+                        <div data-map="desert" class="glass-card p-3 rounded-xl cursor-pointer flex items-center gap-3">
+                            <i class="fa-solid fa-sun text-xl text-amber-400"></i>
+                            <div>
+                                <div class="font-bold text-xs">Gurun Pasir</div>
+                                <div class="text-[10px] text-slate-400">Arena terbuka dengan reruntuhan</div>
+                            </div>
+                        </div>
+                        <div data-map="cyber" class="glass-card p-3 rounded-xl cursor-pointer flex items-center gap-3">
+                            <i class="fa-solid fa-city text-xl text-purple-400"></i>
+                            <div>
+                                <div class="font-bold text-xs">Kota Cyber</div>
+                                <div class="text-[10px] text-slate-400">Arena bertema neon masa depan</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. MODE KESULITAN -->
+                <div class="flex flex-col gap-3">
+                    <h2 class="text-sm font-bold text-red-400 uppercase tracking-wider"><i class="fa-solid fa-gauge-high mr-1"></i> Mode Kesulitan</h2>
+                    <div class="flex flex-col gap-2" id="diff-selector">
+                        <div data-diff="easy" class="glass-card p-3 rounded-xl cursor-pointer border-l-4 border-l-emerald-500">
+                            <div class="font-bold text-xs text-emerald-400">EASY</div>
+                            <div class="text-[10px] text-slate-400">Musuh lambat & sedikit (5 Bot)</div>
+                        </div>
+                        <div data-diff="normal" class="glass-card active p-3 rounded-xl cursor-pointer border-l-4 border-l-yellow-500">
+                            <div class="font-bold text-xs text-yellow-400">NORMAL</div>
+                            <div class="text-[10px] text-slate-400">Musuh standar (10 Bot)</div>
+                        </div>
+                        <div data-diff="hardcore" class="glass-card p-3 rounded-xl cursor-pointer border-l-4 border-l-red-500">
+                            <div class="font-bold text-xs text-red-400">HARDCORE</div>
+                            <div class="text-[10px] text-slate-400">Musuh agresif & agresif (15 Bot)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- START BUTTON -->
+            <button id="start-btn" class="w-full py-4 rounded-xl font-game font-bold text-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-500 hover:to-red-500 text-white shadow-lg transition active:scale-98 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i> MULAI PERTEMPURAN
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER / VICTORY OVERLAY -->
+    <div id="gameover-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/90 backdrop-blur-md">
+        <div class="glass-panel p-8 rounded-3xl max-w-md w-11/12 text-center border border-slate-700">
+            <h2 id="end-title" class="text-4xl font-game font-black mb-2">GAME OVER</h2>
+            <p id="end-sub" class="text-sm text-slate-300 mb-6"></p>
+            <button id="restart-btn" class="w-full py-3.5 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 text-white transition active:scale-95">
+                KEMBALI KE MENU
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- SOUND ENGINE (Web Audio API - Synthesized) ---
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playAttackSound() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playHitSound() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playEliminationSound() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+        }
+
+        const audioSys = new SoundEngine();
+
+        // --- GAME CONFIG & DATA ---
+        const CHAR_STATS = {
+            brawler: { name: 'Brawler', hp: 100, speed: 0.12, damage: 20, color: 0x3b82f6 },
+            ranger: { name: 'Ranger', hp: 80, speed: 0.16, damage: 15, color: 0xeab308 },
+            tank: { name: 'Tank', hp: 160, speed: 0.08, damage: 25, color: 0x10b981 },
+            assassin: { name: 'Assassin', hp: 70, speed: 0.15, damage: 35, color: 0xef4444 }
+        };
+
+        const MAP_CONFIGS = {
+            forest: { bg: 0x0a192f, floor: 0x1e3a1e, props: 0x064e3b, type: 'trees' },
+            desert: { bg: 0x2d1b0e, floor: 0xd97706, props: 0xb45309, type: 'ruins' },
+            cyber: { bg: 0x0f172a, floor: 0x1e1b4b, props: 0xa855f7, type: 'neon' }
+        };
+
+        const DIFFICULTY_SETTINGS = {
+            easy: { enemyCount: 5, enemySpeed: 0.06, enemyHp: 60, enemyDamage: 8 },
+            normal: { enemyCount: 10, enemySpeed: 0.09, enemyHp: 80, enemyDamage: 12 },
+            hardcore: { enemyCount: 15, enemySpeed: 0.13, enemyHp: 110, enemyDamage: 18 }
+        };
+
+        let selectedChar = 'brawler';
+        let selectedMap = 'forest';
+        let selectedDiff = 'normal';
+
+        // --- THREE.JS SYSTEM VARIABLES ---
+        let scene, camera, renderer;
+        let player, playerStats;
+        let enemies = [];
+        let particles = [];
+        let mapProps = [];
+        let isGameRunning = false;
+
+        // Minimap
+        let minimapCanvas, minimapCtx;
+        const MAP_SIZE = 60; // Boundary Size
+
+        // Input Handling
+        const keys = { w: false, a: false, s: false, d: false, space: false };
+        const mobileKeys = { up: false, down: false, left: false, right: false };
+
+        // --- INIT GAME ENGINE ---
+        function initEngine() {
+            const container = document.getElementById('game-container');
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x090d16, 0.025);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 40, 20);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // Minimap setup
+            minimapCanvas = document.getElementById('minimap');
+            minimapCtx = minimapCanvas.getContext('2d');
+
+            // Responsive & Input Listeners
+            window.addEventListener('resize', onWindowResize);
+            setupInputListeners();
+            setupMenuUI();
+
+            // Detect Mobile Device
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                document.getElementById('mobile-controls').classList.remove('hidden');
+                document.getElementById('mobile-controls').classList.add('flex');
+            } else {
+                document.getElementById('desktop-hud').classList.remove('hidden');
+            }
+
+            animate();
+        }
+
+        // --- STICKMAN 2D-IN-3D CREATION ---
+        function createStickmanMesh(colorHex) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const head = new THREE.Mesh(headGeo, mat);
+            head.position.y = 1.6;
+            group.add(head);
+
+            // Torso
+            const torsoGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8);
+            const torso = new THREE.Mesh(torsoGeo, mat);
+            torso.position.y = 1.0;
+            group.add(torso);
+
+            // Limbs (Arms & Legs)
+            const limbGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.7);
+
+            const leftArm = new THREE.Mesh(limbGeo, mat);
+            leftArm.position.set(-0.25, 1.1, 0);
+            leftArm.rotation.z = Math.PI / 6;
+            group.add(leftArm);
+
+            const rightArm = new THREE.Mesh(limbGeo, mat);
+            rightArm.position.set(0.25, 1.1, 0);
+            rightArm.rotation.z = -Math.PI / 6;
+            group.add(rightArm);
+
+            const leftLeg = new THREE.Mesh(limbGeo, mat);
+            leftLeg.position.set(-0.15, 0.4, 0);
+            leftLeg.rotation.z = Math.PI / 12;
+            group.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(limbGeo, mat);
+            rightLeg.position.set(0.15, 0.4, 0);
+            rightLeg.rotation.z = -Math.PI / 12;
+            group.add(rightLeg);
+
+            return group;
+        }
+
+        // --- MAP BUILDER ---
+        function buildMap(mapType) {
+            // Clear existing props
+            mapProps.forEach(p => scene.remove(p));
+            mapProps = [];
+
+            const config = MAP_CONFIGS[mapType];
+            scene.background = new THREE.Color(config.bg);
+            scene.fog.color = new THREE.Color(config.bg);
+
+            // Floor
+            const floorGeo = new THREE.PlaneGeometry(MAP_SIZE * 2, MAP_SIZE * 2);
+            const floorMat = new THREE.MeshStandardMaterial({ color: config.floor, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            mapProps.push(floor);
+
+            // Arena Props
+            const propGeo = config.type === 'trees' 
+                ? new THREE.ConeGeometry(1, 4, 5) 
+                : new THREE.BoxGeometry(2, 3, 2);
+            const propMat = new THREE.MeshStandardMaterial({ color: config.props });
+
+            for (let i = 0; i < 30; i++) {
+                const prop = new THREE.Mesh(propGeo, propMat);
+                prop.position.x = (Math.random() - 0.5) * (MAP_SIZE * 1.6);
+                prop.position.z = (Math.random() - 0.5) * (MAP_SIZE * 1.6);
+                if (config.type === 'trees') prop.position.y = 2;
+                else prop.position.y = 1.5;
+
+                scene.add(prop);
+                mapProps.push(prop);
+            }
+        }
+
+        // --- GAME LOGIC & SPANWING ---
+        function startGame() {
+            isGameRunning = true;
+            audioSys.init();
+
+            // Clear previous actors
+            if (player) scene.remove(player.mesh);
+            enemies.forEach(e => scene.remove(e.mesh));
+            enemies = [];
+
+            // Setup Player
+            playerStats = { ...CHAR_STATS[selectedChar], maxHp: CHAR_STATS[selectedChar].hp };
+            const playerMesh = createStickmanMesh(playerStats.color);
+            playerMesh.position.set(0, 0, 0);
+            scene.add(playerMesh);
+
+            player = {
+                mesh: playerMesh,
+                hp: playerStats.hp,
+                maxHp: playerStats.hp,
+                speed: playerStats.speed,
+                damage: playerStats.damage,
+                isAttacking: false,
+                attackCooldown: 0
+            };
+
+            // Build Selected Map
+            buildMap(selectedMap);
+
+            // Spawn Enemies
+            const diff = DIFFICULTY_SETTINGS[selectedDiff];
+            for (let i = 0; i < diff.enemyCount; i++) {
+                spawnEnemy(diff);
+            }
+
+            // Update UI
+            document.getElementById('menu-overlay').classList.add('hidden');
+            document.getElementById('gameover-overlay').classList.add('hidden');
+            document.getElementById('hud-top').classList.remove('hidden');
+            document.getElementById('hud-top').classList.add('flex');
+            document.getElementById('player-name-hud').innerText = playerStats.name.toUpperCase();
+            updateHUD();
+        }
+
+        function spawnEnemy(diff) {
+            const enemyMesh = createStickmanMesh(0xef4444); // Red enemies
+            
+            // Random position away from center
+            let x = (Math.random() - 0.5) * (MAP_SIZE * 1.5);
+            let z = (Math.random() - 0.5) * (MAP_SIZE * 1.5);
+            if (Math.abs(x) < 5) x = 10;
+            if (Math.abs(z) < 5) z = 10;
+
+            enemyMesh.position.set(x, 0, z);
+            scene.add(enemyMesh);
+
+            enemies.push({
+                mesh: enemyMesh,
+                hp: diff.enemyHp,
+                maxHp: diff.enemyHp,
+                speed: diff.enemySpeed,
+                damage: diff.enemyDamage,
+                attackCooldown: 0
+            });
+        }
+
+        // --- GAME LOOP & UPDATES ---
+        function updateGame() {
+            if (!isGameRunning) return;
+
+            // Player Movement
+            let moveX = 0;
+            let moveZ = 0;
+
+            if (keys.w || mobileKeys.up) moveZ -= 1;
+            if (keys.s || mobileKeys.down) moveZ += 1;
+            if (keys.a || mobileKeys.left) moveX -= 1;
+            if (keys.d || mobileKeys.right) moveX += 1;
+
+            if (moveX !== 0 || moveZ !== 0) {
+                const moveVec = new THREE.Vector3(moveX, 0, moveZ).normalize();
+                player.mesh.position.x += moveVec.x * player.speed;
+                player.mesh.position.z += moveVec.z * player.speed;
+
+                // Rotation
+                const angle = Math.atan2(moveVec.x, moveVec.z);
+                player.mesh.rotation.y = angle;
+            }
+
+            // Boundary Check
+            player.mesh.position.x = Math.max(-MAP_SIZE, Math.min(MAP_SIZE, player.mesh.position.x));
+            player.mesh.position.z = Math.max(-MAP_SIZE, Math.min(MAP_SIZE, player.mesh.position.z));
+
+            // Camera follow
+            camera.position.set(player.mesh.position.x, player.mesh.position.y + 12, player.mesh.position.z + 14);
+            camera.lookAt(player.mesh.position.x, player.mesh.position.y + 1, player.mesh.position.z);
+
+            // Player Attack Cooldown
+            if (player.attackCooldown > 0) player.attackCooldown--;
+
+            // Player Attack Trigger
+            if ((keys.space || player.isAttacking) && player.attackCooldown <= 0) {
+                executePlayerAttack();
+            }
+
+            // Update Enemies AI
+            enemies.forEach((enemy, index) => {
+                const dist = enemy.mesh.position.distanceTo(player.mesh.position);
+                
+                // Chase Player
+                if (dist > 1.2) {
+                    const dir = new THREE.Vector3().subVectors(player.mesh.position, enemy.mesh.position).normalize();
+                    enemy.mesh.position.x += dir.x * enemy.speed;
+                    enemy.mesh.position.z += dir.z * enemy.speed;
+                    enemy.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+                } else {
+                    // Attack Player
+                    if (enemy.attackCooldown <= 0) {
+                        player.hp -= enemy.damage;
+                        enemy.attackCooldown = 60; // 1 detik cooldown
+                        audioSys.playHitSound();
+                        createHitParticles(player.mesh.position, 0xef4444);
+                        updateHUD();
+
+                        if (player.hp <= 0) {
+                            endGame(false);
+                        }
+                    }
+                }
+
+                if (enemy.attackCooldown > 0) enemy.attackCooldown--;
+            });
+
+            // Particles Update
+            updateParticles();
+
+            // Minimap Render
+            renderMinimap();
+        }
+
+        function executePlayerAttack() {
+            player.attackCooldown = 25;
+            audioSys.playAttackSound();
+
+            // Swing Animation Visual
+            player.mesh.children[3].rotation.x = -Math.PI / 2; // Right arm swing
+            setTimeout(() => { if (player.mesh) player.mesh.children[3].rotation.x = 0; }, 150);
+
+            // Check Enemy Hit Area
+            enemies.forEach((enemy, index) => {
+                const dist = player.mesh.position.distanceTo(enemy.mesh.position);
+                if (dist < 2.5) {
+                    enemy.hp -= player.damage;
+                    createHitParticles(enemy.mesh.position, 0xffff00);
+                    audioSys.playHitSound();
+
+                    if (enemy.hp <= 0) {
+                        scene.remove(enemy.mesh);
+                        enemies.splice(index, 1);
+                        audioSys.playEliminationSound();
+                        showKillFeed("Musuh Berhasil Dieliminasi!");
+                        updateHUD();
+
+                        if (enemies.length === 0) {
+                            endGame(true);
+                        }
+                    }
+                }
+            });
+            player.isAttacking = false;
+        }
+
+        // --- PARTICLES ---
+        function createHitParticles(pos, colorHex) {
+            for (let i = 0; i < 8; i++) {
+                const pGeo = new THREE.SphereGeometry(0.1, 8, 8);
+                const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+                const p = new THREE.Mesh(pGeo, pMat);
+                p.position.copy(pos);
+                p.position.y += 1;
+                
+                p.userData = {
+                    vel: new THREE.Vector3((Math.random() - 0.5) * 0.3, Math.random() * 0.2, (Math.random() - 0.5) * 0.3),
+                    life: 20
+                };
+                scene.add(p);
+                particles.push(p);
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.add(p.userData.vel);
+                p.userData.life--;
+                if (p.userData.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // --- HUD & MINIMAP ---
+        function updateHUD() {
+            const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('hp-bar').style.width = `${hpPct}%`;
+            document.getElementById('hp-text').innerText = `${Math.max(0, Math.floor(player.hp))} / ${player.maxHp}`;
+            document.getElementById('enemy-count').innerText = enemies.length;
+        }
+
+        function renderMinimap() {
+            minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            const cx = minimapCanvas.width / 2;
+            const cy = minimapCanvas.height / 2;
+            const scale = 0.8;
+
+            // Draw Radar Lines
+            minimapCtx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+            minimapCtx.beginPath();
+            minimapCtx.arc(cx, cy, 40, 0, Math.PI * 2);
+            minimapCtx.stroke();
+
+            // Player Dot (Green)
+            minimapCtx.fillStyle = '#10b981';
+            minimapCtx.beginPath();
+            minimapCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            // Enemies Dots (Red)
+            enemies.forEach(e => {
+                const relX = (e.mesh.position.x - player.mesh.position.x) * scale;
+                const relZ = (e.mesh.position.z - player.mesh.position.z) * scale;
+                
+                if (Math.hypot(relX, relZ) < 50) {
+                    minimapCtx.fillStyle = '#ef4444';
+                    minimapCtx.beginPath();
+                    minimapCtx.arc(cx + relX, cy + relZ, 3, 0, Math.PI * 2);
+                    minimapCtx.fill();
+                }
+            });
+        }
+
+        function showKillFeed(text) {
+            const kFeed = document.getElementById('kill-feed');
+            document.getElementById('kill-text').innerText = text;
+            kFeed.classList.remove('hidden');
+            setTimeout(() => kFeed.classList.add('hidden'), 1500);
+        }
+
+        function endGame(isVictory) {
+            isGameRunning = false;
+            const overlay = document.getElementById('gameover-overlay');
+            const title = document.getElementById('end-title');
+            const sub = document.getElementById('end-sub');
+
+            if (isVictory) {
+                title.innerText = "VICTORY ROYALE!";
+                title.className = "text-4xl font-game font-black text-yellow-400 mb-2";
+                sub.innerText = "Selamat! Kamu berhasil mengeliminasi semua musuh di arena.";
+            } else {
+                title.innerText = "GAME OVER";
+                title.className = "text-4xl font-game font-black text-red-500 mb-2";
+                sub.innerText = "Kamu telah gugur di pertempuran. Coba lagi!";
+            }
+
+            overlay.classList.remove('hidden');
+        }
+
+        // --- INPUT & MENU SETUP ---
+        function setupInputListeners() {
+            // Keyboard Listeners
+            window.addEventListener('keydown', e => {
+                if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = true;
+                if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = true;
+                if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = true;
+                if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = true;
+                if (e.code === 'Space') keys.space = true;
+            });
+
+            window.addEventListener('keyup', e => {
+                if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = false;
+                if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = false;
+                if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = false;
+                if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = false;
+                if (e.code === 'Space') keys.space = false;
+            });
+
+            // Touch Mobile Controls
+            const bindTouch = (id, keyName) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); mobileKeys[keyName] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); mobileKeys[keyName] = false; });
+            };
+
+            bindTouch('btn-up', 'up');
+            bindTouch('btn-down', 'down');
+            bindTouch('btn-left', 'left');
+            bindTouch('btn-right', 'right');
+
+            const attackBtn = document.getElementById('btn-attack');
+            attackBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (player) player.isAttacking = true;
+            });
+
+            // Desktop Mouse Attack
+            window.addEventListener('mousedown', () => {
+                if (isGameRunning && player) player.isAttacking = true;
+            });
+        }
+
+        function setupMenuUI() {
+            const bindSelector = (containerId, targetVarSetter) => {
+                const container = document.getElementById(containerId);
+                const cards = container.querySelectorAll('.glass-card');
+                cards.forEach(card => {
+                    card.addEventListener('click', () => {
+                        cards.forEach(c => c.classList.remove('active'));
+                        card.classList.add('active');
+                        targetVarSetter(card.dataset.char || card.dataset.map || card.dataset.diff);
+                    });
+                });
+            };
+
+            bindSelector('char-selector', val => selectedChar = val);
+            bindSelector('map-selector', val => selectedMap = val);
+            bindSelector('diff-selector', val => selectedDiff = val);
+
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', () => {
+                document.getElementById('gameover-overlay').classList.add('hidden');
+                document.getElementById('menu-overlay').classList.remove('hidden');
+                document.getElementById('hud-top').classList.add('hidden');
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateGame();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = initEngine;
+    </script>
+</body>
+</html>
